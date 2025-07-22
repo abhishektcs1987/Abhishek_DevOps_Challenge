@@ -12,11 +12,14 @@ import picocli.CommandLine.Option;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 @Command(name = "logparser", mixinStandardHelpOptions = true, version = "1.0",
         description = "Fetch and display logs from a remote API.")
 public class CliTool implements Callable<Integer> {
+    private static Logger LogManager;
+    private static final Logger logger = LogManager.getLogger(String.valueOf(CliTool.class));
     AppConfig config = ConfigLoader.loadConfig("src/config.yaml");
     String apiUrl = config.api.baseUrl;
     String filterType = config.filter.type;
@@ -54,7 +57,7 @@ public class CliTool implements Callable<Integer> {
                         .collect(Collectors.toList());
             }
 
-            logs.forEach(System.out::println);
+            logs.forEach(log -> logger.info(log.toString()));
         }
 
         return 0;

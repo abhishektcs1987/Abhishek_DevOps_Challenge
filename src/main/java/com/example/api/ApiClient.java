@@ -16,8 +16,11 @@ import org.apache.hc.core5.http.ProtocolException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 
 public class ApiClient {
+    private static Logger LogManager;
+    private static final Logger logger = LogManager.getLogger(String.valueOf(ApiClient.class));
     private final String baseUrl;
     private final LogStorageService storage;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -70,7 +73,7 @@ public class ApiClient {
 
                             return extractNextUrl(linkHeader);
                         } else if (status == 403) {
-                            System.out.println("Rate limited. Waiting...");
+                            logger.info("Rate limited. Waiting...");
                             Thread.sleep(config.api.rateLimitWaitSeconds);
                             throw new IOException("Rate limited");
                         } else {
