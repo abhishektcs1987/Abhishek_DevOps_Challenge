@@ -1,0 +1,8 @@
+api:
+  baseUrl: "https://api.github.com/events"
+  maxRetries: 3
+  rateLimitWaitSeconds: 60
+  retryDelayMs: 1000
+
+filter:
+  type: "PushEvent"

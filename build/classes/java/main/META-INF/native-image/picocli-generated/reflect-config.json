@@ -1,0 +1,15 @@
+[
+  {
+    "name" : "com.example.cli.CliTool",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "display" },
+      { "name" : "fetch" },
+      { "name" : "helpRequested" },
+      { "name" : "typeFilter" }
+    ]
+  }
+]
