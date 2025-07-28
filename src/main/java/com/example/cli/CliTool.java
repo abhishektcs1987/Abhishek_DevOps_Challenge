@@ -13,16 +13,19 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 @Command(name = "logparser", mixinStandardHelpOptions = true, version = "1.0",
         description = "Fetch and display logs from a remote API.")
 public class CliTool implements Callable<Integer> {
-    private static Logger LogManager;
-    private static final Logger logger = LogManager.getLogger(String.valueOf(CliTool.class));
-    AppConfig config = ConfigLoader.loadConfig("src/config.yaml");
-    String apiUrl = config.api.baseUrl;
-    String filterType = config.filter.type;
+    // Fixed: Proper logger initialization
+    private static final Logger logger = Logger.getLogger(CliTool.class.getName());
+
+    // Load config once and handle potential IOException
+    private final AppConfig config;
+    private final String apiUrl;
+    private final String filterType;
 
     @Option(names = {"--fetch"}, description = "Fetch logs from API and save them")
     boolean fetch;
@@ -37,39 +40,104 @@ public class CliTool implements Callable<Integer> {
     String typeFilter;
 
     public CliTool() throws IOException {
+        try {
+            this.config = ConfigLoader.loadConfig("src/config.yaml");
+            this.apiUrl = config.api.baseUrl;
+            this.filterType = config.filter.type;
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Failed to load configuration from src/config.yaml", e);
+            throw e;
+        }
     }
 
     @Override
     public Integer call() throws Exception {
-        LogStorageService storage = new LogStorageService();
+        try {
+            LogStorageService storage = new LogStorageService();
 
-        if (fetch) {
-            ApiClient client = new ApiClient("https://api.github.com/events", storage, config.api.maxRetries, config.api.retryDelayMs);
-            client.fetchAllPages();
-        }
-
-        if (display) {
-            List<LogEntry> logs = storage.loadLogs();
-
-            if (typeFilter != null && !typeFilter.isEmpty()) {
-                logs = logs.stream()
-                        .filter(log -> log.getType().equalsIgnoreCase(typeFilter))
-                        .collect(Collectors.toList());
+            if (fetch) {
+                logger.info("Starting fetch operation...");
+                try {
+                    ApiClient client = new ApiClient(
+                            apiUrl != null ? apiUrl : "https://api.github.com/events",
+                            storage,
+                            config.api.maxRetries,
+                            config.api.retryDelayMs
+                    );
+                    client.fetchAllPages();
+                    logger.info("Fetch operation completed successfully");
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Failed to fetch data from API", e);
+                    System.err.println("Error: Failed to fetch data from API. Check logs for details.");
+                    return 1;
+                }
             }
 
-            logs.forEach(log -> logger.info(log.toString()));
-        }
+            if (display) {
+                logger.info("Starting display operation...");
+                try {
+                    List<LogEntry> logs = storage.loadLogs();
 
-        if (helpRequested) {
-            CommandLine.usage(this, System.out);
+                    if (logs.isEmpty()) {
+                        System.out.println("No logs found. Use --fetch to retrieve data first.");
+                        return 0;
+                    }
+
+                    // Apply type filter if provided
+                    String effectiveFilter = typeFilter != null ? typeFilter : filterType;
+                    if (effectiveFilter != null && !effectiveFilter.isEmpty()) {
+                        logs = logs.stream()
+                                .filter(log -> log.getType().equalsIgnoreCase(effectiveFilter))
+                                .collect(Collectors.toList());
+
+                        if (logs.isEmpty()) {
+                            System.out.println("No logs found matching filter: " + effectiveFilter);
+                            return 0;
+                        }
+                    }
+
+                    System.out.println(String.format("Displaying %d log entries:", logs.size()));
+                    System.out.println("=" + "=".repeat(50));
+
+                    logs.forEach(log -> System.out.println(log.toString()));
+
+                    logger.info(String.format("Displayed %d log entries", logs.size()));
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Failed to display logs", e);
+                    System.err.println("Error: Failed to load or display logs. Check logs for details.");
+                    return 1;
+                }
+            }
+
+            // Help is handled automatically by picocli, but we keep this for explicit handling
+            if (helpRequested) {
+                CommandLine.usage(this, System.out);
+                return 0;
+            }
+
+            // If no options provided, show usage
+            if (!fetch && !display && !helpRequested) {
+                System.out.println("No operation specified. Use --help for usage information.");
+                CommandLine.usage(this, System.out);
+                return 0;
+            }
+
             return 0;
-        }
 
-        return 0;
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Unexpected error in CLI tool", e);
+            System.err.println("Error: An unexpected error occurred. Check logs for details.");
+            return 1;
+        }
     }
 
-    public static void main(String[] args) throws IOException {
-        int exitCode = new CommandLine(new CliTool()).execute(args);
-        System.exit(exitCode);
+    public static void main(String[] args) {
+        try {
+            int exitCode = new CommandLine(new CliTool()).execute(args);
+            System.exit(exitCode);
+        } catch (IOException e) {
+            System.err.println("Fatal error: Failed to initialize CLI tool - " + e.getMessage());
+            System.exit(1);
+        }
     }
 }
