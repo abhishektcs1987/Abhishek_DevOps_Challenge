@@ -60,6 +60,11 @@ public class CliTool implements Callable<Integer> {
             logs.forEach(log -> logger.info(log.toString()));
         }
 
+        if (helpRequested) {
+            CommandLine.usage(this, System.out);
+            return 0;
+        }
+
         return 0;
     }
 
