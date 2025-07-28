@@ -10,6 +10,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.logging.Logger;
@@ -38,6 +39,12 @@ public class CliTool implements Callable<Integer> {
 
     @Option(names = "--type", description = "Filter by log type")
     String typeFilter;
+
+    @Option(names = {"--actor", "-a"}, description = "Filter by actor login name (partial match)")
+    String actorFilter;
+
+    @Option(names = {"--limit", "-l"}, description = "Limit number of results displayed")
+    Integer limit;
 
     public CliTool() throws IOException {
         try {
@@ -83,25 +90,51 @@ public class CliTool implements Callable<Integer> {
                         return 0;
                     }
 
-                    // Apply type filter if provided
-                    String effectiveFilter = typeFilter != null ? typeFilter : filterType;
-                    if (effectiveFilter != null && !effectiveFilter.isEmpty()) {
-                        logs = logs.stream()
-                                .filter(log -> log.getType().equalsIgnoreCase(effectiveFilter))
-                                .collect(Collectors.toList());
+                    logger.info(String.format("Loaded %d total log entries", logs.size()));
 
-                        if (logs.isEmpty()) {
-                            System.out.println("No logs found matching filter: " + effectiveFilter);
-                            return 0;
-                        }
+                    // Apply type filter if provided
+                    String effectiveTypeFilter = typeFilter != null ? typeFilter : filterType;
+                    if (effectiveTypeFilter != null && !effectiveTypeFilter.isEmpty()) {
+                        logs = logs.stream()
+                                .filter(log -> log.getType().equalsIgnoreCase(effectiveTypeFilter))
+                                .collect(Collectors.toList());
                     }
 
+                    // Apply actor filter if provided
+                    if (actorFilter != null && !actorFilter.isEmpty()) {
+                        logs = logs.stream()
+                                .filter(log -> log.getActor() != null &&
+                                        log.getActor().getLogin() != null &&
+                                        log.getActor().getLogin().toLowerCase()
+                                                .contains(actorFilter.toLowerCase()))
+                                .collect(Collectors.toList());
+                    }
+
+                    if (logs.isEmpty()) {
+                        String filterDesc = buildFilterDescription(effectiveTypeFilter, actorFilter);
+                        
+                        System.out.println("No logs found matching filter" +
+                                (filterDesc.isEmpty() ? "s." : "s: " + filterDesc));
+                        return 0;
+                    }
+
+                    // Apply limit if specified
+                    boolean isLimited = false;
+                    if (limit != null && limit > 0 && logs.size() > limit) {
+                        logs = logs.stream().limit(limit).collect(Collectors.toList());
+                        isLimited = true;
+                    }
+
+                    // Display results
                     System.out.println(String.format("Displaying %d log entries:", logs.size()));
+                    if (isLimited) {
+                        System.out.println("(Limited to " + limit + " entries)");
+                    }
                     System.out.println("=" + "=".repeat(50));
 
                     logs.forEach(log -> System.out.println(log.toString()));
 
-                    logger.info(String.format("Displayed %d log entries", logs.size()));
+                    logger.info(String.format("Successfully displayed %d log entries", logs.size()));
                 } catch (Exception e) {
                     logger.log(Level.SEVERE, "Failed to display logs", e);
                     System.err.println("Error: Failed to load or display logs. Check logs for details.");
@@ -129,6 +162,20 @@ public class CliTool implements Callable<Integer> {
             System.err.println("Error: An unexpected error occurred. Check logs for details.");
             return 1;
         }
+    }
+
+    private String buildFilterDescription(String typeFilter, String actorFilter) {
+        List<String> filters = new ArrayList<>();
+
+        if (typeFilter != null && !typeFilter.isEmpty()) {
+            filters.add("type='" + typeFilter + "'");
+        }
+
+        if (actorFilter != null && !actorFilter.isEmpty()) {
+            filters.add("actor contains '" + actorFilter + "'");
+        }
+
+        return String.join(", ", filters);
     }
 
     public static void main(String[] args) {
