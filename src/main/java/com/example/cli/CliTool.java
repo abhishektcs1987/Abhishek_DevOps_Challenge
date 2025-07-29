@@ -112,8 +112,7 @@ public class CliTool implements Callable<Integer> {
 
                     if (logs.isEmpty()) {
                         String filterDesc = buildFilterDescription(effectiveTypeFilter, actorFilter);
-                        
-                        System.out.println("No logs found matching filter" +
+                        logger.info("No logs found matching filter" +
                                 (filterDesc.isEmpty() ? "s." : "s: " + filterDesc));
                         return 0;
                     }
